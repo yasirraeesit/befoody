@@ -43,6 +43,18 @@ const foodItemSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    isFeatured: {
+        type: Boolean,
+        default: false
+    },
+    sortOrder: {
+        type: Number,
+        default: 0
+    },
+    stockCount: {
+        type: Number,
+        min: 0
+    },
     createdAt: {
         type: Date,
         default: Date.now

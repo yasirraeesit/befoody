@@ -67,6 +67,14 @@ const orderSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    prepEtaMinutes: {
+        type: Number,
+        min: 0
+    },
+    rejectedReason: {
+        type: String,
+        trim: true
+    },
     createdAt: {
         type: Date,
         default: Date.now

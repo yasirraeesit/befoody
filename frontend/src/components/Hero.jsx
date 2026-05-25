@@ -11,9 +11,12 @@ const Hero = ({ searchTerm, setSearchTerm, handleSearch }) => {
                 <img
                     src={heroBg}
                     alt="Delicious food background"
-                    className="w-full h-full object-cover scale-105 animate-slow-zoom"
+                    className="w-full h-full object-cover scale-105 animate-slow-zoom motion-reduce:animate-none"
+                    loading="eager"
+                    decoding="async"
+                    fetchpriority="high"
                 />
-                <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-white/100 backdrop-blur-[2px]"></div>
+                <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-white/100"></div>
             </div>
 
             {/* Content */}
@@ -32,7 +35,7 @@ const Hero = ({ searchTerm, setSearchTerm, handleSearch }) => {
 
                     {/* Search Bar */}
                     <div className="relative max-w-2xl mx-auto group">
-                        <div className="absolute inset-0 bg-primary-500 blur-2xl opacity-20 group-hover:opacity-30 transition-opacity"></div>
+                        <div className="absolute inset-0 bg-primary-500 blur-xl opacity-10 group-hover:opacity-20 transition-opacity"></div>
                         <form onSubmit={handleSearch} className="relative flex items-center bg-white p-2 rounded-2xl shadow-2xl">
                             <div className="pl-4 pr-2 text-gray-400">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

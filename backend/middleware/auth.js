@@ -42,8 +42,8 @@ const restaurantAuth = async (req, res, next) => {
     try {
         await auth(req, res, () => { });
 
-        if (req.user.role !== 'restaurant' && req.user.role !== 'admin') {
-            return res.status(403).json({ message: 'Access denied. Restaurant owner only.' });
+        if (req.user.role !== 'restaurant' && req.user.role !== 'restaurant_staff' && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Access denied. Restaurant only.' });
         }
 
         next();

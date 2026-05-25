@@ -6,6 +6,12 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "db:inspect": "node inspectDb.js",
+    "db:fix-demo-restaurant-owner": "node fixDemoRestaurantOwner.js",
+    "db:ensure-rider-profile": "node ensureRiderProfile.js",
+    "db:set-demo-locations": "node setDemoRestaurantLocations.js",
+    "db:seed-pk-cities": "node seedPkCities.js",
+    "db:seed-lahore-demo": "node seedLahoreDemoAccounts.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

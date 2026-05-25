@@ -1,22 +1,28 @@
 import React, { useState, useEffect, memo } from 'react';
 import api from '../utils/api';
 import { useNavigate } from 'react-router-dom';
+import { useLocationContext } from '../context/LocationContext';
 
 const PopularDishes = () => {
     const navigate = useNavigate();
+    const { location: deliveryLocation } = useLocationContext();
     const [dishes, setDishes] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         fetchPopularDishes();
-    }, []);
+    }, [deliveryLocation?.city, deliveryLocation?.province]);
 
     const fetchPopularDishes = async () => {
         try {
-            const res = await api.get('/api/fooditems');
-            // Get random 6 dishes
-            const shuffled = [...res.data].sort(() => 0.5 - Math.random());
-            setDishes(shuffled.slice(0, 6));
+            const params = new URLSearchParams();
+            params.set('limit', '6');
+            params.set('random', '1');
+            if (deliveryLocation?.city) params.set('city', deliveryLocation.city);
+            if (deliveryLocation?.province) params.set('province', deliveryLocation.province);
+
+            const res = await api.get(`/api/fooditems?${params.toString()}`);
+            setDishes(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
             console.error('Error fetching dishes:', error);
         } finally {
@@ -63,6 +69,8 @@ const PopularDishes = () => {
                                 src={dish.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300'}
                                 alt={dish.name}
                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                loading="lazy"
+                                decoding="async"
                             />
                             {dish.isVegetarian && (
                                 <div className="absolute top-3 left-3 w-6 h-6 bg-white/90 backdrop-blur-md rounded-full flex items-center justify-center border border-green-100 shadow-sm">

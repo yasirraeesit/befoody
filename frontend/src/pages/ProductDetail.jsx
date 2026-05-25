@@ -57,7 +57,7 @@ const ProductDetail = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 pt-32 flex justify-center">
+            <div className="min-h-screen bg-gray-50 flex justify-center">
                 <div className="animate-pulse flex flex-col items-center gap-4">
                     <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
                     <p className="text-gray-500 font-bold">Loading delicious details...</p>
@@ -68,7 +68,7 @@ const ProductDetail = () => {
 
     if (!product) {
         return (
-            <div className="min-h-screen bg-gray-50 pt-32 text-center">
+            <div className="min-h-screen bg-gray-50 text-center">
                 <div className="text-6xl mb-4">🍽️</div>
                 <h2 className="text-2xl font-black text-gray-900 mb-2">Product not found</h2>
                 <Link to="/dishes" className="text-primary-600 font-bold">Back to all dishes</Link>
@@ -77,7 +77,7 @@ const ProductDetail = () => {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 pt-32 pb-20">
+        <div className="min-h-screen bg-gray-50 pb-20">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Back Link */}
                 <button

@@ -37,7 +37,7 @@ const Testimonials = () => {
                             className="bg-white p-8 rounded-[2.5rem] shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col items-center text-center group"
                         >
                             <div className="w-20 h-20 rounded-2xl overflow-hidden mb-6 shadow-lg border-4 border-primary-50 ring-1 ring-primary-100 group-hover:scale-110 transition-transform duration-300">
-                                <img src={review.avatar} alt={review.name} className="w-full h-full object-cover" />
+                                <img src={review.avatar} alt={review.name} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                             </div>
                             <div className="flex gap-1 mb-4 text-yellow-400">
                                 {[1, 2, 3, 4, 5].map(s => <span key={s}>★</span>)}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLocationContext } from '../context/LocationContext';
 
 const Login = () => {
     const [email, setEmail] = useState('');
@@ -9,6 +10,7 @@ const Login = () => {
     const [loading, setLoading] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
+    const { location: deliveryLocation, setSelectorOpen } = useLocationContext();
 
     const handleDemoLogin = async (role) => {
         let demoEmail = '';
@@ -17,6 +19,7 @@ const Login = () => {
         switch (role) {
             case 'admin':
                 demoEmail = 'admin@befoody.com';
+                demoPassword = 'password123';
                 break;
             case 'restaurant':
                 demoEmail = 'owner@restaurant.com';
@@ -37,6 +40,29 @@ const Login = () => {
         // Optional: auto-submit or just fill
         // Here we just fill the form for clarity, user can click sign in, or we can call login directly
         // Let's call login directly for better UX
+        handleLoginDirectly(demoEmail, demoPassword);
+    };
+
+    const handleLahoreDemoLogin = async (role) => {
+        const demoPassword = 'password123';
+        let demoEmail = '';
+
+        switch (role) {
+            case 'restaurant':
+                demoEmail = 'lahore.owner@befoody.com';
+                break;
+            case 'rider':
+                demoEmail = 'lahore.rider@befoody.com';
+                break;
+            case 'customer':
+                demoEmail = 'lahore.user@befoody.com';
+                break;
+            default:
+                return;
+        }
+
+        setEmail(demoEmail);
+        setPassword(demoPassword);
         handleLoginDirectly(demoEmail, demoPassword);
     };
 
@@ -161,6 +187,46 @@ const Login = () => {
                         </button>
                     </div>
                 </div>
+
+                {deliveryLocation?.city?.toLowerCase?.() === 'lahore' && (
+                    <div className="text-center mt-8">
+                        <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-4">— Lahore Demo Accounts —</p>
+                        <div className="grid grid-cols-3 gap-2">
+                            <button
+                                onClick={() => handleLahoreDemoLogin('restaurant')}
+                                className="flex flex-col items-center justify-center p-3 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                                title="lahore.owner@befoody.com / password123"
+                            >
+                                <span className="text-lg mb-1 group-hover:scale-110 transition-transform">🍳</span>
+                                <span className="text-[10px] font-bold text-gray-700">Restaurant</span>
+                            </button>
+                            <button
+                                onClick={() => handleLahoreDemoLogin('rider')}
+                                className="flex flex-col items-center justify-center p-3 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                                title="lahore.rider@befoody.com / password123"
+                            >
+                                <span className="text-lg mb-1 group-hover:scale-110 transition-transform">🚴</span>
+                                <span className="text-[10px] font-bold text-gray-700">Rider</span>
+                            </button>
+                            <button
+                                onClick={() => handleLahoreDemoLogin('customer')}
+                                className="flex flex-col items-center justify-center p-3 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                                title="lahore.user@befoody.com / password123"
+                            >
+                                <span className="text-lg mb-1 group-hover:scale-110 transition-transform">👤</span>
+                                <span className="text-[10px] font-bold text-gray-700">User</span>
+                            </button>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setSelectorOpen(true)}
+                            className="mt-4 text-xs font-black text-primary-600 hover:text-primary-700 underline"
+                        >
+                            Change location
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

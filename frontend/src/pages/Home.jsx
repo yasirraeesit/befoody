@@ -1,23 +1,28 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef, useState, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLocationContext } from '../context/LocationContext';
 import api from '../utils/api';
-import PopularDishes from '../components/PopularDishes';
 import Hero from '../components/Hero';
 import CuisineCategories from '../components/CuisineCategories';
-import ServiceHighlights from '../components/ServiceHighlights';
-import Collections from '../components/Collections';
-import Testimonials from '../components/Testimonials';
-import Footer from '../components/Footer';
+
+const PopularDishes = React.lazy(() => import('../components/PopularDishes'));
+const Collections = React.lazy(() => import('../components/Collections'));
+const ServiceHighlights = React.lazy(() => import('../components/ServiceHighlights'));
+const Testimonials = React.lazy(() => import('../components/Testimonials'));
+const Footer = React.lazy(() => import('../components/Footer'));
 
 const Home = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { location: deliveryLocation } = useLocationContext();
     const [restaurants, setRestaurants] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
+    const [renderBelowFold, setRenderBelowFold] = useState(false);
+    const restaurantCacheRef = useRef(new Map());
 
     useEffect(() => {
         if (user) {
@@ -28,19 +33,38 @@ const Home = () => {
     }, [user, navigate]);
 
     useEffect(() => {
-        fetchRestaurants();
-    }, [activeCategory]);
+        const idleCallback = window.requestIdleCallback
+            ? window.requestIdleCallback(() => setRenderBelowFold(true), { timeout: 1500 })
+            : window.setTimeout(() => setRenderBelowFold(true), 400);
 
-    const fetchRestaurants = async () => {
+        return () => {
+            if (window.cancelIdleCallback) window.cancelIdleCallback(idleCallback);
+            else window.clearTimeout(idleCallback);
+        };
+    }, []);
+
+    const fetchRestaurants = useCallback(async (category) => {
+        const key = `${category || 'All'}|${deliveryLocation?.city || ''}`;
+        const cached = restaurantCacheRef.current.get(key);
+        if (cached) {
+            setRestaurants(cached);
+            setLoading(false);
+            return;
+        }
+
         try {
             setLoading(true);
-            const response = await api.get('/api/restaurants');
-            let data = response.data;
+            setError(null);
+            const params = new URLSearchParams();
+            params.set('limit', '6');
+            const categoryKey = category || 'All';
+            if (categoryKey !== 'All') params.set('cuisine', categoryKey);
+            if (deliveryLocation?.city) params.set('city', deliveryLocation.city);
+            if (deliveryLocation?.province) params.set('province', deliveryLocation.province);
 
-            if (activeCategory !== 'All') {
-                data = data.filter(r => r.cuisine === activeCategory);
-            }
-
+            const response = await api.get(`/api/restaurants?${params.toString()}`);
+            const data = Array.isArray(response.data) ? response.data : [];
+            restaurantCacheRef.current.set(key, data);
             setRestaurants(data);
             setLoading(false);
         } catch (err) {
@@ -48,7 +72,11 @@ const Home = () => {
             setError('Failed to load restaurants');
             setLoading(false);
         }
-    };
+    }, [deliveryLocation?.city, deliveryLocation?.province]);
+
+    useEffect(() => {
+        fetchRestaurants(activeCategory);
+    }, [activeCategory, fetchRestaurants]);
 
     const handleSearch = useCallback((e) => {
         e.preventDefault();
@@ -56,6 +84,8 @@ const Home = () => {
             navigate(`/restaurants?search=${encodeURIComponent(searchTerm)}`);
         }
     }, [searchTerm, navigate]);
+
+    const featuredRestaurants = useMemo(() => restaurants.slice(0, 6), [restaurants]);
 
     return (
         <div className="min-h-screen bg-white">
@@ -100,7 +130,7 @@ const Home = () => {
                 ) : error ? (
                     <div className="text-center py-20 bg-red-50 rounded-3xl border border-red-100">
                         <p className="text-red-600 font-bold">{error}</p>
-                        <button onClick={fetchRestaurants} className="mt-4 text-red-700 underline font-black">Try again</button>
+                        <button onClick={() => fetchRestaurants(activeCategory)} className="mt-4 text-red-700 underline font-black">Try again</button>
                     </div>
                 ) : restaurants.length === 0 ? (
                     <div className="text-center py-20 bg-gray-50 rounded-3xl border border-gray-100">
@@ -109,7 +139,7 @@ const Home = () => {
                     </div>
                 ) : (
                     <div className="grid md:grid-cols-3 gap-8">
-                        {restaurants.slice(0, 6).map((restaurant) => (
+                        {featuredRestaurants.map((restaurant) => (
                             <div
                                 key={restaurant._id}
                                 onClick={() => navigate(`/restaurants/${restaurant._id}`)}
@@ -117,9 +147,11 @@ const Home = () => {
                             >
                                 <div className="relative h-64 rounded-[2rem] overflow-hidden mb-5 shadow-lg group-hover:shadow-2xl transition-all duration-500 transform group-hover:-translate-y-2">
                                     <img
-                                        src={restaurant.imageUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'}
+                                        src={restaurant.imageUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=70'}
                                         alt={restaurant.name}
                                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                        loading="lazy"
+                                        decoding="async"
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60"></div>
                                     <div className="absolute bottom-6 left-6 right-6 flex items-center justify-between">
@@ -135,7 +167,9 @@ const Home = () => {
                                     {restaurant.name}
                                 </h3>
                                 <div className="flex items-center gap-2 mt-2">
-                                    <span className="text-sm font-bold text-gray-400 capitalize">{restaurant.cuisine} • {restaurant.location}</span>
+                                    <span className="text-sm font-bold text-gray-400 capitalize">
+                                        {(Array.isArray(restaurant.cuisine) ? restaurant.cuisine.join(', ') : restaurant.cuisine) || 'Cuisine'} • {restaurant?.serviceCity || restaurant?.address?.city || 'Nearby'}
+                                    </span>
                                 </div>
                             </div>
                         ))}
@@ -143,20 +177,24 @@ const Home = () => {
                 )}
             </section>
 
-            {/* UI Component: Popular Dishes */}
-            <PopularDishes />
+            {renderBelowFold && (
+                <Suspense fallback={null}>
+                    {/* UI Component: Popular Dishes */}
+                    <PopularDishes />
 
-            {/* Collections Section */}
-            <Collections />
+                    {/* Collections Section */}
+                    <Collections />
 
-            {/* UI Component: Service Highlights */}
-            <ServiceHighlights />
+                    {/* UI Component: Service Highlights */}
+                    <ServiceHighlights />
 
-            {/* Testimonials */}
-            <Testimonials />
+                    {/* Testimonials */}
+                    <Testimonials />
 
-            {/* Footer */}
-            <Footer />
+                    {/* Footer */}
+                    <Footer />
+                </Suspense>
+            )}
         </div>
     );
 };

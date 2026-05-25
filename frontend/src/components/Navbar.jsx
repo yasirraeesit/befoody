@@ -2,28 +2,49 @@ import React, { useState, useEffect, useRef, memo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { useLocationContext } from '../context/LocationContext';
 import logo from '../assets/logo.png';
 
 const Navbar = () => {
     const { user, logout, isAdmin, isRestaurant, isRider } = useAuth();
     const { cartItems } = useCart();
     const location = useLocation();
-
-    // Debug logging
-    useEffect(() => {
-        console.log('Navbar Debug:', { user, isAdmin, isRestaurant, isRider });
-    }, [user, isAdmin, isRestaurant, isRider]);
+    const { location: deliveryLocation, setSelectorOpen } = useLocationContext();
 
     const [scrolled, setScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
     const profileRef = useRef(null);
+    const navRef = useRef(null);
 
     useEffect(() => {
         const handleScroll = () => setScrolled(window.scrollY > 20);
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
+
+    useEffect(() => {
+        if (!navRef.current) return;
+
+        const setVar = () => {
+            const h = navRef.current?.offsetHeight || 0;
+            if (h > 0) document.documentElement.style.setProperty('--app-nav-h', `${h}px`);
+        };
+
+        setVar();
+
+        let ro;
+        if (typeof ResizeObserver !== 'undefined') {
+            ro = new ResizeObserver(() => setVar());
+            ro.observe(navRef.current);
+        }
+
+        window.addEventListener('resize', setVar);
+        return () => {
+            window.removeEventListener('resize', setVar);
+            if (ro) ro.disconnect();
+        };
+    }, [scrolled, mobileMenuOpen, profileOpen]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -77,6 +98,7 @@ const Navbar = () => {
 
     return (
         <nav
+            ref={navRef}
             className={`fixed w-full z-50 transition-all duration-500 ${showSolidNav ? 'py-3 bg-white/90 backdrop-blur-xl shadow-lg border-b border-gray-100' : 'py-5 bg-transparent'
                 }`}
         >
@@ -116,6 +138,25 @@ const Navbar = () => {
 
                     {/* Right Side Actions */}
                     <div className="flex items-center gap-2 md:gap-5">
+                        {/* Delivery Location */}
+                        {(!isAdmin && !isRestaurant && !isRider) && (
+                            <button
+                                type="button"
+                                onClick={() => setSelectorOpen(true)}
+                                className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-2xl border transition-all ${showSolidNav
+                                    ? 'bg-white border-gray-100 hover:border-primary-200 hover:shadow-sm'
+                                    : 'bg-white/10 border-white/20 text-white hover:bg-white/20 backdrop-blur-md'
+                                    }`}
+                                title="Change delivery location"
+                            >
+                                <span className={`text-sm ${showSolidNav ? 'text-gray-700' : 'text-white'}`}>📍</span>
+                                <span className={`text-sm font-black max-w-[180px] truncate ${showSolidNav ? 'text-gray-800' : 'text-white'}`}>
+                                    {deliveryLocation?.city ? `${deliveryLocation.city}, ${deliveryLocation.province}` : 'Select location'}
+                                </span>
+                                <span className={`text-xs font-black ${showSolidNav ? 'text-gray-400' : 'text-white/70'}`}>▼</span>
+                            </button>
+                        )}
+
                         {/* Cart (Visible for customers/guests) */}
                         {(!user || (!isRestaurant && !isRider && !isAdmin)) && (
                             <Link to="/cart" className="relative group p-2.5 rounded-xl hover:bg-primary-50/50 transition-all">

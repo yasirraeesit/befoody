@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../utils/api';
+import { useLocationContext } from '../context/LocationContext';
 
 const Restaurants = () => {
+    const { location: deliveryLocation } = useLocationContext();
     const [restaurants, setRestaurants] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -16,11 +18,15 @@ const Restaurants = () => {
 
     useEffect(() => {
         fetchRestaurants();
-    }, []);
+    }, [deliveryLocation?.city, deliveryLocation?.province]);
 
     const fetchRestaurants = async () => {
         try {
-            const res = await api.get('/api/restaurants');
+            const params = new URLSearchParams();
+            if (deliveryLocation?.city) params.set('city', deliveryLocation.city);
+            if (deliveryLocation?.province) params.set('province', deliveryLocation.province);
+
+            const res = await api.get(`/api/restaurants?${params.toString()}`);
             setRestaurants(res.data);
         } catch (error) {
             console.error('Error fetching restaurants:', error);
@@ -73,16 +79,56 @@ const Restaurants = () => {
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="input-field flex-1"
                         />
-                        <button
-                            onClick={() => setShowFilters(!showFilters)}
-                            className="btn btn-outline md:hidden"
-                        >
-                            {showFilters ? 'Hide Filters' : 'Show Filters'} 🔽
-                        </button>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowFilters(!showFilters)}
+                                className="btn bg-gray-100 text-gray-800 hover:bg-gray-200"
+                            >
+                                {showFilters ? 'Hide Filters' : 'Show Filters'} 🔽
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setSelectedCuisine('All');
+                                    setSortBy('rating');
+                                    setPriceRange('all');
+                                    setDeliveryTime('all');
+                                    setSearchQuery('');
+                                }}
+                                className="btn bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                                title="Reset filters"
+                            >
+                                Reset
+                            </button>
+                        </div>
                     </div>
 
+                    {/* Active filter chips (when collapsed) */}
+                    {!showFilters && (
+                        <div className="flex flex-wrap gap-2">
+                            {deliveryLocation?.city && (
+                                <span className="badge bg-gray-100 text-gray-700 text-xs">📍 {deliveryLocation.city}</span>
+                            )}
+                            {selectedCuisine !== 'All' && (
+                                <span className="badge bg-primary-50 text-primary-700 text-xs">🍽️ {selectedCuisine}</span>
+                            )}
+                            {sortBy !== 'rating' && (
+                                <span className="badge bg-gray-100 text-gray-700 text-xs">↕️ {sortBy}</span>
+                            )}
+                            {priceRange !== 'all' && (
+                                <span className="badge bg-gray-100 text-gray-700 text-xs">💰 {priceRange}</span>
+                            )}
+                            {deliveryTime !== 'all' && (
+                                <span className="badge bg-gray-100 text-gray-700 text-xs">🕐 {deliveryTime}</span>
+                            )}
+                            {(selectedCuisine === 'All' && sortBy === 'rating' && priceRange === 'all' && deliveryTime === 'all' && !searchQuery.trim()) && (
+                                <span className="text-sm font-bold text-gray-400">Filters collapsed</span>
+                            )}
+                        </div>
+                    )}
+
                     {/* Filters */}
-                    <div className={`${showFilters ? 'block' : 'hidden md:block'} space-y-4`}>
+                    {showFilters && (
+                        <div className="space-y-4">
                         {/* Cuisine Filter */}
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Cuisine</label>
@@ -145,7 +191,8 @@ const Restaurants = () => {
                                 </select>
                             </div>
                         </div>
-                    </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Results Count */}

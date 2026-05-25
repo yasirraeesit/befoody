@@ -54,10 +54,40 @@ const restaurantSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    isOpen: {
+        type: Boolean,
+        default: true
+    },
+    hours: [{
+        day: { type: String, trim: true },
+        open: { type: String, trim: true },  // "10:00"
+        close: { type: String, trim: true }, // "22:00"
+        closed: { type: Boolean, default: false }
+    }],
+    notificationSoundEnabled: {
+        type: Boolean,
+        default: true
+    },
+    notificationsMutedUntil: {
+        type: Date
+    },
     ownerId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
+    },
+    serviceCountry: {
+        type: String,
+        default: 'Pakistan',
+        trim: true
+    },
+    serviceProvince: {
+        type: String,
+        trim: true
+    },
+    serviceCity: {
+        type: String,
+        trim: true
     },
     createdAt: {
         type: Date,

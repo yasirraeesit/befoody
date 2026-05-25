@@ -78,6 +78,7 @@ app.use('/api/restaurants', require('./routes/restaurants'));
 app.use('/api/fooditems', require('./routes/fooditems'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/uploads', require('./routes/uploads'));
 
 // Basic Route
 app.get('/', (req, res) => {

@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
+import { useLocationContext } from '../context/LocationContext';
 
 const Dishes = () => {
     const navigate = useNavigate();
     const { addToCart } = useCart();
     const { addToast } = useToast();
+    const { location: deliveryLocation } = useLocationContext();
     const [dishes, setDishes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -18,12 +20,16 @@ const Dishes = () => {
 
     useEffect(() => {
         fetchDishes();
-    }, []);
+    }, [deliveryLocation?.city, deliveryLocation?.province]);
 
     const fetchDishes = async () => {
         try {
             setLoading(true);
-            const res = await api.get('/api/fooditems');
+            const params = new URLSearchParams();
+            if (deliveryLocation?.city) params.set('city', deliveryLocation.city);
+            if (deliveryLocation?.province) params.set('province', deliveryLocation.province);
+
+            const res = await api.get(`/api/fooditems?${params.toString()}`);
             setDishes(res.data);
             setLoading(false);
         } catch (error) {
@@ -51,7 +57,7 @@ const Dishes = () => {
     }, [dishes, searchTerm, activeFilter, sortBy]);
 
     return (
-        <div className="min-h-screen bg-gray-50 pt-32 pb-20">
+        <div className="min-h-screen bg-gray-50 pb-20">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Header */}
                 <div className="mb-12">

@@ -1,7 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const Order = require('../models/Order');
-const { auth, adminAuth } = require('../middleware/auth');
+const Restaurant = require('../models/Restaurant');
+const { auth, adminAuth, restaurantAuth } = require('../middleware/auth');
+const { auditLog } = require('../utils/audit');
+
+const ALLOWED_STATUS = new Set(['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'cancelled']);
+
+function canTransition(fromStatus, toStatus) {
+    if (fromStatus === toStatus) return true;
+    const transitions = {
+        pending: new Set(['confirmed', 'cancelled']),
+        confirmed: new Set(['preparing', 'cancelled']),
+        preparing: new Set(['ready_for_pickup', 'cancelled']),
+        ready_for_pickup: new Set(['out_for_delivery']),
+        out_for_delivery: new Set(['delivered']),
+        delivered: new Set([]),
+        cancelled: new Set([])
+    };
+    return transitions[fromStatus]?.has(toStatus) || false;
+}
 
 // Create order (supports both authenticated and guest checkout)
 router.post('/', async (req, res) => {
@@ -47,6 +65,46 @@ router.post('/', async (req, res) => {
             orderData.userId = userId;
         } else {
             delete orderData.userId; // Ensure no invalid userId is passed for guest
+        }
+
+        // Enforce restaurant open/closed before allowing new orders
+        const restaurant = await Restaurant.findById(restaurantId).lean();
+        if (!restaurant) return res.status(404).json({ message: 'Restaurant not found' });
+        if (restaurant.isOpen === false) {
+            return res.status(400).json({ message: 'Restaurant is currently closed' });
+        }
+
+        // Optional hours enforcement (if hours are configured)
+        if (Array.isArray(restaurant.hours) && restaurant.hours.length > 0) {
+            const dayKey = new Date().toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase(); // mon,tue...
+            const map = {
+                mon: 'Mon',
+                tue: 'Tue',
+                wed: 'Wed',
+                thu: 'Thu',
+                fri: 'Fri',
+                sat: 'Sat',
+                sun: 'Sun'
+            };
+            const todayLabel = map[dayKey] || null;
+            const today = todayLabel ? restaurant.hours.find((h) => h.day === todayLabel) : null;
+            if (today && today.closed) {
+                return res.status(400).json({ message: 'Restaurant is closed today' });
+            }
+            if (today && today.open && today.close) {
+                const [oh, om] = today.open.split(':').map(Number);
+                const [ch, cm] = today.close.split(':').map(Number);
+                const now = new Date();
+                const minsNow = now.getHours() * 60 + now.getMinutes();
+                const minsOpen = oh * 60 + om;
+                const minsClose = ch * 60 + cm;
+                const inWindow = minsOpen <= minsClose
+                    ? (minsNow >= minsOpen && minsNow <= minsClose)
+                    : (minsNow >= minsOpen || minsNow <= minsClose); // overnight
+                if (!inWindow) {
+                    return res.status(400).json({ message: 'Restaurant is currently closed (outside working hours)' });
+                }
+            }
         }
 
         console.log('Creating order:', JSON.stringify(orderData, null, 2));
@@ -139,19 +197,76 @@ router.get('/track/:id', async (req, res) => {
 // Update order status
 router.put('/:id/status', auth, async (req, res) => {
     try {
-        const { status } = req.body;
+        const { status, rejectedReason, prepEtaMinutes } = req.body;
         const order = await Order.findById(req.params.id);
 
         if (!order) {
             return res.status(404).json({ message: 'Order not found' });
         }
 
+        if (!ALLOWED_STATUS.has(status)) {
+            return res.status(400).json({ message: 'Invalid status' });
+        }
+
+        // Authorization rules:
+        // - admin can update any order
+        // - restaurant can update orders of their restaurant
+        // - rider/customer can only update their own orders (existing behavior)
+        if (req.user.role === 'restaurant') {
+            const restaurant = await Restaurant.findById(order.restaurantId);
+            if (!restaurant) return res.status(404).json({ message: 'Restaurant not found' });
+            if (restaurant.ownerId.toString() !== req.userId) {
+                return res.status(403).json({ message: 'Not authorized' });
+            }
+        }
+
+        if (req.user.role === 'restaurant_staff') {
+            const staffRestaurantId = req.user.restaurantId?.toString();
+            if (!staffRestaurantId || staffRestaurantId !== order.restaurantId.toString()) {
+                return res.status(403).json({ message: 'Not authorized' });
+            }
+        }
+
+        if (req.user.role !== 'admin' && req.user.role !== 'restaurant') {
+            if (order.userId && order.userId.toString() !== req.userId) {
+                return res.status(403).json({ message: 'Not authorized' });
+            }
+        }
+
+        const prevStatus = order.status;
+
+        if (!canTransition(order.status, status)) {
+            return res.status(400).json({ message: `Invalid transition: ${order.status} → ${status}` });
+        }
+
+        // Extra fields for restaurant workflow
+        if (status === 'cancelled') {
+            order.rejectedReason = (rejectedReason || '').trim() || order.rejectedReason;
+        }
+        if (typeof prepEtaMinutes === 'number' && Number.isFinite(prepEtaMinutes)) {
+            order.prepEtaMinutes = prepEtaMinutes;
+        }
+
         order.status = status;
         await order.save();
 
+        if (req.user.role === 'restaurant' || req.user.role === 'restaurant_staff' || req.user.role === 'admin') {
+            await auditLog({
+                restaurantId: order.restaurantId,
+                actorUserId: req.userId,
+                action: 'order.status.update',
+                meta: { orderId: order._id, from: prevStatus, to: status, rejectedReason: order.rejectedReason, prepEtaMinutes: order.prepEtaMinutes }
+            });
+        }
+
         // Emit socket event for real-time update
-        const io = req.app.get('socketio');
-        io.to(`user_${order.userId}`).emit('orderStatusUpdate', order);
+        try {
+            const io = req.app.get('socketio');
+            if (io && order.userId) io.to(`user_${order.userId}`).emit('orderStatusUpdate', order);
+            if (io && order.restaurantId) io.to(`restaurant_${order.restaurantId}`).emit('orderStatusUpdate', order);
+        } catch (e) {
+            // no-op
+        }
 
         res.json(order);
     } catch (error) {
@@ -174,10 +289,79 @@ router.get('/admin/all', adminAuth, async (req, res) => {
 // Get orders for a specific restaurant
 router.get('/restaurant/:restaurantId', auth, async (req, res) => {
     try {
+        if (req.user.role === 'restaurant_staff') {
+            const staffRestaurantId = req.user.restaurantId?.toString();
+            if (!staffRestaurantId || staffRestaurantId !== req.params.restaurantId) {
+                return res.status(403).json({ message: 'Not authorized' });
+            }
+        }
+
         const orders = await Order.find({ restaurantId: req.params.restaurantId })
-            .populate('userId', 'name email') // Populate user details
+            .populate('userId', 'name email phone') // Populate user details
+            .populate({ path: 'riderId', populate: { path: 'userId', select: 'name email phone' } })
             .sort({ createdAt: -1 });
         res.json(orders);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+});
+
+// Restaurant: export recent orders as CSV
+router.get('/restaurant/:restaurantId/export.csv', restaurantAuth, async (req, res) => {
+    try {
+        const restaurantId = req.params.restaurantId;
+        const restaurant = await Restaurant.findById(restaurantId);
+        if (!restaurant) return res.status(404).json({ message: 'Restaurant not found' });
+        if (req.user.role !== 'admin' && restaurant.ownerId.toString() !== req.userId) {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+
+        const orders = await Order.find({ restaurantId }).sort({ createdAt: -1 }).limit(500).lean();
+
+        const header = [
+            'order_id',
+            'created_at',
+            'status',
+            'total_amount',
+            'delivery_fee',
+            'payment_method',
+            'customer_name',
+            'customer_phone',
+            'delivery_street',
+            'delivery_city',
+            'prep_eta_minutes',
+            'rejected_reason'
+        ];
+
+        const escapeCsv = (value) => {
+            const s = String(value ?? '');
+            if (/[\",\n]/.test(s)) return `"${s.replace(/\"/g, '""')}"`;
+            return s;
+        };
+
+        const lines = [header.join(',')];
+        for (const o of orders) {
+            const customerName = o.guestInfo?.name || '';
+            const customerPhone = o.guestInfo?.phone || '';
+            lines.push([
+                o._id,
+                o.createdAt ? new Date(o.createdAt).toISOString() : '',
+                o.status,
+                o.totalAmount,
+                o.deliveryFee ?? 0,
+                o.paymentMethod,
+                customerName,
+                customerPhone,
+                o.deliveryAddress?.street || '',
+                o.deliveryAddress?.city || '',
+                o.prepEtaMinutes ?? '',
+                o.rejectedReason ?? ''
+            ].map(escapeCsv).join(','));
+        }
+
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="orders_${restaurantId}.csv"`);
+        res.send(lines.join('\n'));
     } catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
     }
