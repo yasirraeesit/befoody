@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:pages": "npm run build && node -e \"const fs=require('fs');fs.copyFileSync('dist/index.html','dist/404.html')\"",
     "lint": "eslint .",
     "preview": "vite preview",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "predeploy": "npm run build:pages",
+    "deploy": "gh-pages -d dist -b gh-pages -m \"Deploy frontend\""
   },
   "dependencies": {
     "axios": "^1.6.0",
